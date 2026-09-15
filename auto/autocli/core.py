@@ -17,6 +17,11 @@ from rich.live import Live
 from rich.progress import Progress
 from rich.text import Text
 
+import select
+import termios
+import tty
+import threading
+
 
 def _print_access_hints(pods, use_https):
     """Helper to print access hints at the end of start"""
@@ -761,7 +766,7 @@ def show_status(namespace="default", all_namespaces=False, watch=False):
     if watch:
         console.clear()
 
-    def generate_content():
+    def generate_content(is_watch_mode = True):
         """Generate the renderable content (Group) for the status"""
         items = []
 
@@ -799,22 +804,56 @@ def show_status(namespace="default", all_namespaces=False, watch=False):
         # Build the table using helper
         items.append(utils.build_pod_table(namespace, all_namespaces))
 
+        if is_watch_mode:
+            items.append(Text(""))
+            items.append(Text("Press Q or CTRL+C to exit..."))
+
         return Group(*items)
 
     # Main Execution Logic
     if watch:
+        thread = None
+
+        # Get current low-end terminal capabilities
+        old_settings = termios.tcgetattr(sys.stdin)
+
         # Use Live to update in-place without strobe
         with Live(generate_content(), console=console, refresh_per_second=4) as live:
-            while True:
-                try:
-                    time.sleep(3)
-                    live.update(generate_content())
-                except KeyboardInterrupt:
-                    break
+            # Only for Unix, capturing keypress without waiting for it
+            tty.setcbreak(sys.stdin.fileno())
+
+            try:
+                while True:
+                    # Creating a new thread cause the main thread was waiting 3 seconds and the wait for press "q" was not firing immediately
+                    if thread is None or not thread.is_alive():
+                        thread = threading.Thread(target=renderContent, args=(live, generate_content))
+                        thread.daemon = True # This for kill thread when app exits and avoid Thread.join()
+                        thread.start()
+
+                    # Wait for "q" pressed
+                    if was_key_press():
+                        char = sys.stdin.read(1)
+                        if char.lower() == "q":
+                            break
+            except KeyboardInterrupt:
+                pass
+            finally:
+                # Refreshing low-end terminal capabilities
+                termios.tcsetattr(sys.stdin, termios.TCSADRAIN, old_settings)
+
+        live.stop()
+        live.console.show_cursor(True)
     else:
         # Just print once
-        rprint(generate_content())
+        rprint(generate_content(False))
 
+# Only for Unix, capturing keypress data
+def was_key_press():
+    return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+
+def renderContent(live, generate_content):
+    time.sleep(3)
+    live.update(generate_content())
 
 def pull_and_build_pods():
     """Pull all git repos, then docker build, then upload the images to the local registry"""
