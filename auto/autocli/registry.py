@@ -293,7 +293,7 @@ def list_cluster_images():
     print()
 
 
-def tag_pod_docker_image(pod) -> None:
+def tag_pod_docker_image(pod, refresh_pod = False) -> None:
     """Tag and push a new docker image to local registry"""
 
     # Local vars
@@ -331,7 +331,23 @@ def tag_pod_docker_image(pod) -> None:
         command = "docker image prune -f"
         utils.run_and_wait(command)
 
+        if refresh_pod:
+            delete_pod(pod)
+
     # They tried to build a pod that didn't exist.  Maybe a typo?
     else:
         print("")
         rprint(f"[red bold]ERROR: Portal {pod} does not exist")
+
+def delete_pod(pod):
+    # Deleting (refreshing) pod
+    command = f"kubectl get pods --no-headers -o custom-columns=\":metadata.name\" | grep \"{pod}\""
+    complete_pod = str(utils.run_and_return(command))
+
+    if "\n" in complete_pod:
+        rprint(f"  [yellow bold]-- WARNING: Cannot refresh pod {pod} cause it has many references, refresh it yourself")
+        return
+
+    rprint(f"  -- Refreshing pod [bright_cyan]{complete_pod}[/]")
+    command = f"kubectl delete pod {complete_pod}"
+    utils.run_and_wait(command)

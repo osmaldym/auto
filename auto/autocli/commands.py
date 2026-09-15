@@ -211,10 +211,11 @@ def logs(self, pod):  # pylint: disable=unused-argument
 
 @auto.command()
 @click.argument("pod", shell_complete=get_pod_names)
+@click.option("-r", "--refresh", is_flag=True)
 @click.pass_context
-def tag(self, pod):  # pylint: disable=unused-argument
+def tag(self, refresh, pod):  # pylint: disable=unused-argument
     """Build, Tag, and Load a pod container image in the local repository"""
-    registry.tag_pod_docker_image(pod)
+    registry.tag_pod_docker_image(pod, refresh)
 
 
 @auto.command()
