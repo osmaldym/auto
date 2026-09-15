@@ -217,6 +217,13 @@ def tag(self, refresh, pod):  # pylint: disable=unused-argument
     """Build, Tag, and Load a pod container image in the local repository"""
     registry.tag_pod_docker_image(pod, refresh)
 
+@auto.command()
+@click.argument("pod", shell_complete=get_pod_names)
+@click.pass_context
+def refresh(self, pod):  # pylint: disable=unused-argument
+    """Refresh (delete) a pod"""
+    registry.delete_pod(pod, True)
+
 
 @auto.command()
 @click.argument("pod", shell_complete=get_pod_names)

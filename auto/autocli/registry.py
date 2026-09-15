@@ -292,6 +292,8 @@ def list_cluster_images():
         print(f"  - image: {img}")
     print()
 
+def pod_exists(code_path, pod):
+    return os.path.isdir(os.path.join(code_path, pod))
 
 def tag_pod_docker_image(pod, refresh_pod = False) -> None:
     """Tag and push a new docker image to local registry"""
@@ -308,7 +310,7 @@ def tag_pod_docker_image(pod, refresh_pod = False) -> None:
     rprint(f"  -- Building and Tagging: [bright_cyan]{pod} {version}")
 
     # Verify the pod is real using the users source code folder
-    if os.path.isdir(os.path.join(code_path, pod)):
+    if pod_exists(code_path, pod):
         rprint(f"     = Found pod {pod}")
 
         # Perform docker build
@@ -339,13 +341,20 @@ def tag_pod_docker_image(pod, refresh_pod = False) -> None:
         print("")
         rprint(f"[red bold]ERROR: Portal {pod} does not exist")
 
-def delete_pod(pod):
+def delete_pod(pod, by_refresh_command = False):
     # Deleting (refreshing) pod
+
+    if by_refresh_command:
+        code_path = CONFIG["code"]
+        if not pod_exists(code_path, pod):
+            rprint(f"[red bold]ERROR: Portal {pod} does not exist")
+            return
+
     command = f"kubectl get pods --no-headers -o custom-columns=\":metadata.name\" | grep \"{pod}\""
     complete_pod = str(utils.run_and_return(command))
 
     if "\n" in complete_pod:
-        rprint(f"  [yellow bold]-- WARNING: Cannot refresh pod {pod} cause it has many references, refresh it yourself")
+        rprint(f"  [red bold]-- ERROR: Cannot refresh pod {pod} cause it has many references, refresh it yourself")
         return
 
     rprint(f"  -- Refreshing pod [bright_cyan]{complete_pod}[/]")
